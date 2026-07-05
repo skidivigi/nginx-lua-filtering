@@ -1,0 +1,57 @@
+services:
+  nginx:
+    image: openresty/openresty:1.31-bookworm-fat
+    container_name: mvp-nginx
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
+      - ./nginx/lua:/etc/nginx/lua:ro
+      - nginx-client-body:/var/lib/nginx/body
+    depends_on:
+      - scanner
+      - monolith
+    networks:
+      - mvp-net
+
+  scanner:
+    build:
+      context: ./scanner
+    container_name: mvp-scanner
+    environment:
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: "3310"
+      MAX_FILE_SIZE_BYTES: "52428800"
+    depends_on:
+      - clamav
+    networks:
+      - mvp-net
+
+  clamav:
+    image: clamav/clamav:stable
+    container_name: mvp-clamav
+    volumes:
+      - clamav-db:/var/lib/clamav
+    networks:
+      - mvp-net
+    healthcheck:
+      test: ["CMD-SHELL", "clamdscan --ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  monolith:
+    build:
+      context: ./monolith
+    container_name: mvp-monolith
+    networks:
+      - mvp-net
+
+volumes:
+  clamav-db:
+  nginx-client-body:
+
+networks:
+  mvp-net:
+    driver: bridge
